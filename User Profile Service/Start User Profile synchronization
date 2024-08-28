@@ -1,0 +1,89 @@
+<#
+    Run User Profile Sync on SharePoint server
+    NOTE: Uses FIMSynchronizationService
+#>
+
+$farmPassword = "**********"
+ 
+#Checks wheather the script is running as admin, if not then starts as admin.
+If (-NOT ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator"))
+ 
+{
+$arguments = "& '" + $myinvocation.mycommand.definition + "'"
+Start-Process powershell -Verb runAs -ArgumentList $arguments
+Break
+}
+ 
+#Add snaping if it doesnt exist
+if ( (Get-PSSnapin -Name microsoft.sharepoint.powershell -EA "SilentlyContinue") -eq $null )
+{
+    Add-PsSnapin microsoft.sharepoint.powershell
+}
+ 
+#Script runs on local server:
+$hostname = hostname
+$Farmaccount = (Get-SPFarm).DefaultServiceAccount.Name
+ 
+#Store instances into variables:
+$service1 = $(Get-SPServiceInstance | ? {$_.TypeName -match "User Profile Service" -and $_.Server -match $hostname})
+$service2 = $(Get-SPServiceInstance | ? {$_.TypeName -match "User Profile Synchronization Service" -and $_.Server -match $hostname})
+ 
+#Stop service instance
+Write-Host -f Cyan "Stopping the User Profile Instance"
+Stop-SPServiceInstance -Identity $service1.ID -Confirm:$false
+ 
+while($service1.status -ne "Disabled")
+{
+Write-Host "Stopping the User Profile Service instance"
+sleep 3
+$service1 = $(Get-SPServiceInstance | ? {$_.TypeName -match "User Profile Service" -and $_.Server -match $hostname})
+}
+write-host -f Green "OK"
+write-host ""
+ 
+#Start service instance
+Write-Host -f Cyan "Starting the User Profile Instance"
+Start-SPServiceInstance -Identity $service1.ID 
+ 
+while($service1.status -ne "Online")
+{
+Write-Host "Starting the User Profile Service instance"
+sleep 3
+$service1 = $(Get-SPServiceInstance | ? {$_.TypeName -match "User Profile Service" -and $_.Server -match $hostname})
+}
+write-host -f Green "OK"
+write-host ""
+ 
+#Start Synchronization service
+Write-Host -f Cyan "Starting the User Profile Synchronization.."
+$upsa = Get-SPServiceApplication | ?{$_.TypeName -like "*User Profile Serv*"}
+ 
+$service2.Status = [Microsoft.SharePoint.Administration.SPObjectStatus]::Provisioning
+$service2.IsProvisioned = $false
+$service2.UserProfileApplicationGuid = $upsa.Id
+$service2.Update()
+$upsa.SetSynchronizationMachine($hostname, $service2.Id, $Farmaccount, $farmPassword)
+Start-SPServiceInstance $service2
+ 
+Write-Host ""
+$t = 0
+$service2 = $(Get-SPServiceInstance | ? {$_.TypeName -eq "User Profile Synchronization Service" -and $_.Server -match $hostname})
+ 
+#get the Forefront Identity Manager Synchronization service to monitor its status
+$syncservice = Get-Service FIMSynchronizationService
+ 
+while(-not ($service2.Status -eq "Online"))
+{
+    sleep 10;
+    Write-Host "Be Patient...You have only waited $t seconds"
+    $service2 = $(Get-SPServiceInstance | ? {$_.TypeName -match "User Profile Synchronization Service" -and $_.Server -match $hostname})
+    $t = $t + 10
+    if($service2.Status -eq "Disabled"){Write-Host -f Yellow "Sync start has failed, press the anykey to exit";read-host;exit}
+}
+  $t = $t - 10
+  write-host ""
+Write-Host -f Green "OK - Synchronization Service is Online!"
+sleep 3
+write-host ""
+iisreset
+
