@@ -1,5 +1,5 @@
 <#
-    Copy all documents between Libraries using ShareGate Migrate module (formerly called ShareGate Desktop)
+    Copy documents between Libraries by date range using ShareGate Migrate module (formerly called ShareGate Desktop)
 
     NOTE: ShareGate Migrate must be installed on your machine for the ShareGate PowerShell commands to work, and the module is automatically available on your system when you install it.   
     SEE ALSO: https://documentation.sharegate.com/hc/en-us/articles/115006079028-Use-Import-Module-when-you-launch-PowerShell-through-Windows
