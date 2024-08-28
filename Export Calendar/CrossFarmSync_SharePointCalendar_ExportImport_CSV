@@ -1,0 +1,370 @@
+<#
+  Functions to...
+  - export Calendar items to CSV
+  - parse MMC values
+  - import CSV items into Calendar
+
+  Good use of
+  - CSV, Hashtables, MMC/Managed Metadata
+#>
+
+# C:\PowershellForTaskScheduler\CrossFarmSync_CollegeActivityCalendar_Export.ps1
+
+Add-PSSnapin Microsoft.SharePoint.PowerShell -ErrorAction SilentlyContinue 
+
+# Exports calendar items created or modified
+function ExportCalendarItems([string]$webURL, [string]$destinationListInternalName, [string]$exportFilepath) {
+
+    #$webURL = "http://cyprus:82/collaboration/policy"
+    #$destinationListInternalName = "College Activity Calendar"
+
+    $output = "";
+    $eventInfo = "";
+
+    try {
+
+        $date = Get-Date
+        $output += "Export script started " + $date + "`r`n";
+
+        #Get the target SPWeb object
+        $web = Get-SPWeb -identity $webURL
+  
+        #Get the Target List 
+        $destinationList = $web.Lists[$destinationListInternalName] 
+  
+        #Array to Hold Result - PSObjects 
+        $destinationListItemCollection = @() 
+
+        $count = 0
+
+        $destinationList.Items | foreach {
+
+            Write-Host "...SOURCE: " $_.ID $_["Title"] $_["EventDate"] -NoNewline
+            #("...SOURCE: " + $_.ID + $_["Title"] + $_["EventDate"]) | Out-File -FilePath $LogGeneral -Append
+
+            #Load all the properties you want to export into an array
+            if ($_["PublishToCouncilNet"] -eq 1) {
+                $properties = @{
+                "Title" = $_["Title"]
+                "Start Time" = Get-Date $_["EventDate"] -format s # [DateTime]::Parse($_["EventDate"]);
+                "End Time" = Get-Date $_["EndDate"] -format s  #[DateTime]::Parse($_["EndDate"]);
+                "Full Title" = $_["Full Title"] 
+                "College Representatives" = parseMMCValues $_["College Representatives"] ", "
+                "Event Location" = parseMMCValues $_["Event Location"] ", "
+                "SourceItemID" = $_.ID
+                }
+
+                Write-Host "......EXPORT:" $properties.Get_Item("Start Time") -ForegroundColor Green
+                #("......EXPORT:" + $properties.Get_Item("Start Time")) | Out-File -FilePath $LogGeneral -Append
+                $output += "> EXPORT        (PublishToCouncilNet = True)" ;
+
+                #Create an object to hold the properties above
+                $ExportItem = New-Object PSObject  -Property $properties
+
+                #Add the object with property to an Array 
+                $destinationListItemCollection += $ExportItem
+
+                $count++;
+
+            } else {
+                Write-Host "......DO NOT EXPORT (PublishToCouncilNet = False)" -ForegroundColor Red
+                #("......DO NOT EXPORT (PublishToCouncilNet = False)") | Out-File -FilePath $LogGeneral -Append 
+                $output += "> DO NOT EXPORT (PublishToCouncilNet = False)";
+            }
+
+            $output += "`t ID: " + $_.ID + " Event Date: " + $_["EventDate"] + " Title: '" + $_["Title"]  + "'`r`n"
+
+        }
+
+        $output | Out-File -FilePath $LogGeneral -Append 
+
+        #Export the result Array to CSV file 
+        $destinationListItemCollection | Export-CSV $exportFilepath -Encoding UTF8
+
+        Write-Host; Write-Host "$count records exported to $exportFilepath" -ForegroundColor Green ; Write-Host 
+        ("$count records exported to $exportFilepath") | Out-File -FilePath $LogGeneral -Append
+ 
+        #Dispose the web Object 
+    } catch {
+    
+        $_.Exception.Message | Out-File $LogErrors -Append 
+        $_.Exception.Message | Out-File $LogGeneral -Append 
+
+    } finally {
+
+        if ($web -ne $null) {
+            $web.dispose()
+        }
+
+        $date = Get-Date
+        ("Export script completed " + $date) | Out-File $LogGeneral -Append 
+
+    }
+
+}
+
+function parseMMCValues($MMCvalue, [string] $newSeparator) {
+    if ($MMCvalue -eq $null) {
+        return ""
+    }
+
+    if ($MMCvalue.GetType().FullName -eq "Microsoft.SharePoint.Taxonomy.TaxonomyFieldValueCollection") {
+        if ($newSeparator.length -eq 0) { $newSeparator = ", " } 
+        $values = "";
+        foreach ($term in $MMCvalue) {
+            $values += $term.Label + $newSeparator;
+        }
+        #$values += $newSeparator;
+        #return $values.trimEnd($newSeparator);
+        return $values.trimEnd($newSeparator);
+    } else {
+        return $MMCvalue.Label;
+    }
+}
+
+
+function ImportCalendarItems([string] $sourceFile, [string] $destinationWebUrl, [string] $destinationListInternalName) {
+
+    #[string] $sourceFile = "f:\calendar.csv" 
+    #[string] $destinationWebUrl = "https://councilnetadfstest.oct.ca"
+    #[string] $destinationListInternalName = "TestCalendar2"
+
+    $sourceRecordsToImport = Import-CSV -path $sourceFile;
+    $totalRecordsToImport = $sourceRecordsToImport.count
+
+    # Destination SPWeb URL
+    $web = Get-SPWeb -identity $destinationWebUrl
+
+    # Destination list name
+    $destinationList = $web.Lists[$destinationListInternalName] 
+
+    # Get all items from destination list
+    $destinationItems = $destinationList.Items
+
+    # declare 'to be deleted' hashtable
+    #[System.Collections.ArrayList] $arrayToBeDeleted; 
+
+    # load existing events into hashtable
+    if ($hashtableCurrentEvents) { $hashtableCurrentEvents.Clear() }
+    $hashtableCurrentEvents = @{"SourceItemID" = "ID"}
+    foreach ($destinationItem in $destinationItems) 
+    {
+`       $hashtableCurrentEvents.Add($destinationItem["SourceItemID"].ToString(), $destinationItem.ID)
+        #$arrayToBeDeleted.Add($destinationItem.ID);
+    }
+
+    #$hashtableCurrentEvents
+    #$hashtableCurrentEvents.Count
+    #$hashtableCurrentEvents[29]
+    #$hashtableCurrentEvents -is [hashtable]
+    #$hashtableCurrentEvents.ContainsKey("66") # correct way - the Key is a string
+    #$hashtableCurrentEvents.Get_Item("66")
+
+    $updated = 0;     $added = 0;    $failedToUpdate = 0;     $deleted = 0;
+
+    # loop through csv file
+    foreach ($row in $sourceRecordsToImport) {
+        
+        Write-Host; Write-Host "Next row to import: " -ForegroundColor Yellow -NoNewline 
+        Write-Host $row -ForegroundColor DarkYellow  
+
+        if ($hashtableCurrentEvents.ContainsKey($row.SourceItemID)) {
+            Write-Host " - Already exists. Updating..." -ForegroundColor DarkYellow -NoNewline
+            $existingItemID = $hashtableCurrentEvents.Get_Item($row.SourceItemID)
+            $existingItem = $destinationList.Items.GetItemById([int]$existingItemID)
+            if ($existingItem) {
+                $existingItem["Title"] = $row.Title;
+                $existingItem["EventDate"] = $row."Start Time"
+                $existingItem["EndDate"] = $row."End Time"
+                $existingItem["Full Title"] = $row."Full Title"
+                $existingItem["College Representatives"] = $row."College Representatives"
+                $existingItem["Event Location"] = $row."Event Location"
+                $existingItem.Update()
+                Write-Host " updated!" -ForegroundColor DarkYellow
+                $updated++
+                $msg = "Successfully updated record. ID: " + $existingItemID + "... SourceItemId: " + $row.SourceItemID + "... Title: " + $row.Title + "`n" + $row;
+                spLog $False $msg 
+
+                # remove updated records from lookup list so that later any remaining records can be deleted
+                $hashtableCurrentEvents.Remove($row.SourceItemID); 
+            } else {
+                Write-Host " failed to update :-( " -ForegroundColor Red
+                $failedToUpdate++
+                spLog $True "Failed to update record. ID: " + $existingItemID + "... SourceItemId: " + $row.SourceItemID + "... Title: " + $row.Title + "`n" + $row
+            }
+        } else {
+            Write-Host " - Does not exist in destination. Adding new item..." -ForegroundColor DarkYellow
+            $newItem = $destinationList.Items.Add()
+            $newItem["Title"] = $row.Title;
+            $newItem["EventDate"] = $row."Start Time"
+            $newItem["EndDate"] = $row."End Time"
+            $newItem["Full Title"] = $row."Full Title"
+            $newItem["College Representatives"] = $row."College Representatives"
+            $newItem["Event Location"] = $row."Event Location"
+            $newItem["SourceItemID"] = $row.SourceItemID
+            $newItem.Update()
+            Write-Host " added!" -ForegroundColor DarkYellow
+            spLog $False "Successfully added new record. ID.... $newItem.ID ... SourceItemId: $row.SourceItemID ... Title: $row.Title"
+            $added++
+        }
+    } 
+
+    # clean up old records (i.e. records that are in destination list but no longer in source list)
+    $hashtableCurrentEvents.Remove("SourceItemID"); 
+    foreach ($key in $hashtableCurrentEvents.Keys) { 
+        $cleanupItemID = $hashtableCurrentEvents.Get_Item($key)
+        $cleanupItem = $destinationList.Items.GetItemById([int]$cleanupItemID)
+        Write-Host "Deleting $key ..." -NoNewline
+        if ($cleanupItem) {
+            $destinationList.Items.DeleteItemById($cleanupItemID);
+            Write-Host " deleted"
+           $deleted++;
+        } else {
+            Write-Host "could not find " $existingItemID
+        }
+    }
+
+
+    $web.dispose()
+
+    $report = @"
+
+
+        Total Records to import: $totalRecordsToImport
+
+         -Records Added: $added
+         -Records Updated: $updated
+         -Failed to Update: $failedToUpdate
+         -Records Deleted: $deleted
+"@
+
+    Write-Host $report
+
+    Mailer "College Activity Calendar - Import to CouncilNet" "Import of College Activity Calendar items is complete. $report"
+
+}
+
+# Delete all items
+function DeleteAllEvents([string] $WebUrl, [string] $ListInternalName) {
+
+    # SPWeb URL
+    $web = Get-SPWeb -identity $WebUrl
+
+    # list name
+    $List = $web.Lists[$ListInternalName] 
+
+    $items = $List.Items; 
+    foreach ($item in $items) { 
+        Write-host "  Say Goodbye to $($item.id)" -foregroundcolor red; 
+        $list.getitembyid($Item.id).Delete(); 
+    }
+
+
+}
+
+Function Mailer ($subject,  $message) { 
+    try {
+        $emailTo = "ahamilton@oct.ca" # "ahamilton@oct.ca, aaronster@gmail.com"
+        $emailFrom = "donotreply.it@oct.ca"
+        #$emailFrom = "noreply@<yourdomain>.com" 
+        #$subject="<Your Text Here>" 
+        $smtpserver="juliet" 
+        $smtp=new-object Net.Mail.SmtpClient($smtpServer) 
+        $smtp.Send($emailFrom, $emailTo, $subject, $message) 
+    } catch {
+        $_.Exception.Message | Out-File $LogErrors -Append 
+        $_.Exception.Message | Out-File $LogGeneral -Append 
+    }
+    finally {}
+} 
+
+Function ftp ($filepath, $destinationURL, $user, $pass, $domain) {
+    # https://stackoverflow.com/questions/1867385/upload-files-with-ftp-using-powershell
+    # create the FtpWebRequest and configure it
+    $ftp = [System.Net.FtpWebRequest]::Create("ftp://localhost/me.png")
+    $ftp = [System.Net.FtpWebRequest]$ftp
+    $ftp.Method = [System.Net.WebRequestMethods+Ftp]::UploadFile
+    $ftp.Credentials = new-object System.Net.NetworkCredential($user,$pass,$domain)
+    $ftp.UseBinary = $true
+    $ftp.UsePassive = $true
+    # read in the file to upload as a byte array
+    $content = [System.IO.File]::ReadAllBytes($filepath)
+    $ftp.ContentLength = $content.Length
+    # get the request stream, and write the bytes into it
+    $rs = $ftp.GetRequestStream()
+    $rs.Write($content, 0, $content.Length)
+    # be sure to clean up after ourselves
+    $rs.Close()
+    $rs.Dispose()
+
+}
+
+Function spLog ($isError, $message) {
+
+    $diagSvc = [Microsoft.SharePoint.Administration.SPDiagnosticsService]::Local
+    $categoryError = new-object Microsoft.SharePoint.Administration.SPDiagnosticsCategory("OCT",
+                                       [Microsoft.SharePoint.Administration.TraceSeverity]::High,
+                                      [Microsoft.SharePoint.Administration.EventSeverity]::Error )
+
+    $categoryInformation = new-object Microsoft.SharePoint.Administration.SPDiagnosticsCategory("OCT",
+                                       [Microsoft.SharePoint.Administration.TraceSeverity]::Monitorable,
+                                      [Microsoft.SharePoint.Administration.EventSeverity]::Information)
+
+    if ($isError) {
+        $diagSvc.WriteTrace(0, $categoryError, [Microsoft.SharePoint.Administration.TraceSeverity]::High, "[College Activity Calendar Import] $message" )
+    } else {
+        $diagSvc.WriteTrace(0, $categoryInformation, [Microsoft.SharePoint.Administration.TraceSeverity]::Monitorable, "[College Activity Calendar Import] $message" )
+    }
+}
+
+
+# DeleteAllEvents "https://councilnetadfstest.oct.ca" "TestCalendar2"  
+
+# ExportCalendarItems "http://cyprus:82/collaboration/policy" "College Activity Calendar" "f:\calendar.csv"
+
+# cls; ImportCalendarItems "f:\calendar.csv" "https://councilnetadfstest.oct.ca" "TestCalendar2"
+
+# Mailer "test" "hello"
+
+<#
+NEXT STEPS
+1. clean up the ULS logging
+    - you want it to be on separate lines <-- skipping this
+2. See if you can add in Date Modified <-- it will be too tricky 
+3. Add in 'Publish' checkbox
+4. talk to Wade about FTP
+ #>
+
+# NEXT - you should really report on the records added in your email notification
+
+$Date        = Get-Date
+$WorkingPath = 'd:\ExportCollegeActivityCalendar'
+$ExportFile  = Join-Path $WorkingPath 'exportFromLeonid.csv'
+$LogPath     = Join-Path $WorkingPath 'Log'
+$LogGeneral  = Join-Path $LogPath 'Output.log'
+$LogEnvStart = Join-Path $LogPath 'EnvStart.xml'
+$LogErrors   = Join-Path $LogPath 'Errors.log'
+
+#Initialize log folder
+New-Item -ItemType Directory -Force -Path $ExportPath
+New-Item -ItemType Directory -Force -Path $LogPath
+
+#Log initial details
+$Admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]"Administrator")
+$Whoami = whoami # Simple, could use $env as well
+"Running script $($MyInvocation.MyCommand.Path) at $Date" | Out-File $LogGeneral
+"Admin: $Admin" | Out-File $LogGeneral -Append
+"User: $Whoami" | Out-File $LogGeneral -Append
+"Bound parameters: $($PSBoundParameters | Out-String)" | Out-File $LogGeneral -Append
+
+#Only track two layers.  If you need deeper properties, expand this or track them independently
+Get-Variable | Export-Clixml -Depth 2 -Path $LogEnvStart
+
+#Run the export!
+try {
+    ExportCalendarItems "http://insite.oct.ca/ccs/policy" "College Activity Calendar" $ExportFile;
+} catch {
+    $_.Exception.Message | Out-File $LogErrors -Append 
+    $_.Exception.Message | Out-File $LogGeneral -Append 
+}
+    
