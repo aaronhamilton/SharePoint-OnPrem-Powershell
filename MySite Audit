@@ -3,6 +3,8 @@
     Useful for auditing or migration scenario
 #>
 
+Add-PSSnapin microsoft.sharepoint.powershell
+
 function Get-SPMySitesWithData {
 [CmdletBinding()]
 Param(
