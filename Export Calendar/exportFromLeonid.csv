@@ -1,0 +1,4 @@
+﻿#TYPE System.Management.Automation.PSCustomObject
+"Start Time","Event Location","End Time","Full Title","College Representatives","SourceItemID","Title"
+"2017-01-09T14:20:00","Ottawa","2017-01-09T14:50:00","Meeting Name 1","John Smith, Jane Doe","318","Conference Presentation"
+"2017-01-12T12:30:00","Toronto","2017-01-12T13:30:00","Meeting Name 2","John Smith, Jane Doe","330","Faculty Presentation"
