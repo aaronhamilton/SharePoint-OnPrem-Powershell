@@ -1,0 +1,1 @@
+Code from an old solution whereby calendsr items were exported from SharePoint, deposited on a remote server, and then ingested into another SharePoint farm in a remote domain.
