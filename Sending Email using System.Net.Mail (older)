@@ -1,0 +1,29 @@
+<#
+System.Net.Mail API is the precursor to (and basis for) Send-EmailMessage.
+It is a namespace that contains classes to send electronic messages to the SMTP server. The delivery is carried out using the SmtpClient.Send or .Send method.
+#>
+
+# Using SMTPClient.Send
+
+$EmailFrom = "mother-of-dragons@houseoftargaryen.net"
+$EmailTo = "jon-snow@winterfell.com"
+$Subject = "Happy Samhain"
+$Body = "Jonny, congrats on Samhain!"
+$SMTPServer = "smtp.mailtrap.io"
+$SMTPClient = New-Object Net.Mail.SmtpClient($SmtpServer, 587)
+$SMTPClient.EnableSsl = $true
+$SMTPClient.Credentials = New-Object System.Net.NetworkCredential("<username>", "<password>");
+$SMTPClient.Send($EmailFrom, $EmailTo, $Subject, $Body)
+
+# Using .Send
+
+$smtpFrom = "mother-of-dragons@houseoftargaryen.net"
+$smtpTo = "jon-snow@winterfell.com"
+$messageSubject = "Happy Samhain"
+$messageBody = "Jonny, congrats on Samhain!"
+$smtpServer = "smtp.mailtrap.io"
+$smtp = New-Object Net.Mail.SmtpClient($SmtpServer, 587)
+$smtp.EnableSsl = $true
+$smtp.Credentials = New-Object System.Net.NetworkCredential("94b784b5970edf", "01a5d515011f6e");
+$smtp.Send($smtpFrom , $smtpTo, $messageSubject, $messageBody)
+
