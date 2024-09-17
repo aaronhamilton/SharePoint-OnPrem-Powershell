@@ -82,7 +82,7 @@ catch {
     $exceptions += "`n`n$ScriptRunningOn`nLog: $logOutputFilePath"
     $msg = "$JobName Exception occurred"
     $body = $exceptions
-    . .\SendEmail.ps1 -subject $msg -body $body -recipientEmail $EmailRecipient
+    . .\SendEmail.ps1 -subject $msg -body $body -recipientEmail $EmailRecipient -BodyAsHTML $false 
 
     Stop-Transcript 
 }
