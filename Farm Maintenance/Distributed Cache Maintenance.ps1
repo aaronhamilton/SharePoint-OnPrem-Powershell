@@ -93,11 +93,20 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
   Start-CacheCluster
 #>
 
+<# GET REFERENCES
+    $SPFarm = Get-SPFarm
+    $cacheClusterName = “SPDistributedCacheCluster_” + $SPFarm.Id.ToString()
+    $cacheClusterManager = [Microsoft.SharePoint.DistributedCaching.Utilities.SPDistributedCacheClusterInfoManager]::Local
+    $cacheClusterInfo = $cacheClusterManager.GetSPDistributedCacheClusterInfo($cacheClusterName);
+    $instanceName =”SPDistributedCacheService Name=AppFabricCachingService”
+    $serviceInstance = Get-SPServiceInstance | ? {($_.Service.Tostring()) -eq $instanceName -and ($_.Server.Name) -eq $env:computername}
+#>
+
 # TO START DCACHE SERVICE in SP2019
 <#  
     $instanceName ="SPDistributedCacheService Name=AppFabricCachingService"
     $serviceInstance = Get-SPServiceInstance | ? {($_.service.tostring()) -eq $instanceName -and ($_.server.name) -eq $env:computername}
-    $serviceInstance.Provision()
+    $serviceInstance.Provision() # you may need to add cacheclusterInfo from above
 #> 
 
 # TO STOP DCACHE SERVICE in SP2019
