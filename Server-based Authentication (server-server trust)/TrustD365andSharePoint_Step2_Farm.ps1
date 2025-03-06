@@ -66,4 +66,4 @@ Get-SPTrustedSecurityTokenIssuer
 # if it doesn't already exist, create it
 $acs = New-SPTrustedSecurityTokenIssuer –Name "ACSInternal" –IsTrustBroker:$true –MetadataEndpoint $metadataEndpoint -RegisteredIssuerName $acsissuer 
 
-Write-Host "Copy this value for use in Step 3: ACSIssuer = $acsissuer"
+Write-Host "Copy this value for use in Step 3: Issuer = $issuer"
