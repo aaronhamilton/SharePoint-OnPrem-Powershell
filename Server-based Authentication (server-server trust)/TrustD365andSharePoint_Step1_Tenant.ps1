@@ -10,7 +10,7 @@
 # Step 1 - Set SharePoint host name
 # --------------------------------------------------------------
 
-$HostName = "argon.oct.ca"
+$HostName = "argon.oct.ca" # "krypton.oct.ca" 
 
 # --------------------------------------------------------------
 # Step 2 - Prepare Powershell Session
