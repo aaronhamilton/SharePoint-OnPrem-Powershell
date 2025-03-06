@@ -15,8 +15,9 @@ $HostName = "argon.oct.ca"
 # --------------------------------------------------------------
 # Step 2 - Prepare Powershell Session
 # --------------------------------------------------------------
-Enable-PSRemoting -force  
-New-PSSession  
+
+#Enable-PSRemoting -force  
+#New-PSSession  
 Import-Module MSOnline -force  
 Import-Module MSOnlineExt -force
 
