@@ -12,7 +12,7 @@
 #        - Supply URL of your SP site
 # --------------------------------------------------------------
 
-$ACSIssuer = "00000001-0000-0000-c000-000000000000@403b5de9-f888-4fef-9eea-bd256ecec060"
+$Issuer = "00000007-0000-0000-c000-000000000000@403b5de9-f888-4fef-9eea-bd256ecec060"
 
 $siteURL = "https://krypton.oct.ca/docs/1/"   # e.g. "https://krypton.oct.ca/docs/1/"
 
@@ -22,10 +22,10 @@ $siteURL = "https://krypton.oct.ca/docs/1/"   # e.g. "https://krypton.oct.ca/doc
 
 # 1.Register customer engagement apps with the SharePoint site collection.
 $spSite = Get-SPSite $siteURL   # "https://krypton.oct.ca/docs/1/" https://krypton.oct.ca/sites/phoenix-docs-03  
-Register-SPAppPrincipal -site $spSite.RootWeb -NameIdentifier $ACSIssuer -DisplayName "Phoenix Docs"  
+Register-SPAppPrincipal -site $spSite.RootWeb -NameIdentifier $Issuer -DisplayName "Phoenix Docs"  
 
 # 2.Grant customer engagement apps access to the SharePoint site.
-$app = Get-SPAppPrincipal -NameIdentifier $ACSIssuer -Site $spSite.Rootweb 
+$app = Get-SPAppPrincipal -NameIdentifier $Issuer -Site $spSite.Rootweb 
 Set-SPAppPrincipalPermission -AppPrincipal $app -Site $spSite.Rootweb -Scope "sitecollection" -Right "FullControl"  # -EnableAppOnlyPolicy
 
 # 3.Set the claims-based authentication mapping type.
@@ -40,7 +40,7 @@ $spSite.Dispose()
 $siteURL = "https://krypton.oct.ca"
 $spSite = Get-SPSite $siteURL    
 
-$appPrincipal = Get-SPAppPrincipal -Site $spSite.RootWeb  -NameIdentifier $ACSIssuer 
+$appPrincipal = Get-SPAppPrincipal -Site $spSite.RootWeb  -NameIdentifier $Issuer 
 
 $spSite = Get-SPSite -Identity $site
 Remove-SPAppPrincipalPermission -AppPrincipal $appPrincipal -Site $spSite.RootWeb -Scope SiteCollection # Site
